@@ -569,6 +569,12 @@ fn render_multi_output(
 
     for iterable in iterables {
         let mut ctx = ctx.clone();
+        // We defer inserting `accent` until after the flavor (and its colors)
+        // have been expanded into the context. This prevents templates from
+        // having to rely on a specific matrix order and avoids lookups like
+        // `flavor.colors[accent]` failing when `accent` is inserted before
+        // `flavor` is available.
+        let mut deferred_accent: Option<String> = None;
         for (key, value) in iterable {
             // expand flavor automatically to prevent requiring:
             // `{% set flavor = flavors[flavor] %}`
@@ -582,8 +588,45 @@ fn render_multi_output(
                 for (_, color) in flavor {
                     ctx.insert(&color.identifier, &color);
                 }
+            } else if key == "accent" {
+                // Save the accent value and insert it after the loop so the
+                // flavor and its colors are already present in the context.
+                deferred_accent = Some(value);
             } else {
                 ctx.insert(key, &value);
+            }
+        }
+
+        // Insert deferred accent (if any) now that flavor/colors are in ctx.
+        if let Some(accent_value) = deferred_accent {
+            // Try to resolve the accent to a full color object for the active
+            // flavor. If successful, insert the color object as `accent` so
+            // templates can access its fields (e.g. `accent.hex`). Also keep
+            // the original identifier available as `accent_name` for cases
+            // where a string is required (filenames, etc).
+            let mut inserted = false;
+            if let Some(flavor_identifier) = ctx
+                .get("flavor")
+                .and_then(|v| v.get("identifier"))
+                .and_then(|s| s.as_str())
+            {
+                if let Some(flavor_obj) = palette.flavors.get(flavor_identifier) {
+                    if let Some(color) = flavor_obj.colors.get(&accent_value) {
+                        // Insert the fully-expanded color object as `accent`.
+                        ctx.insert("accent", color);
+                        // Preserve the string identifier for compatibility.
+                        ctx.insert("accent_name", &accent_value);
+                        // Also ensure the color is available under its identifier
+                        // (this mirrors the flavor expansion behavior).
+                        ctx.insert(&color.identifier, color);
+                        inserted = true;
+                    }
+                }
+            }
+            if !inserted {
+                // Fall back to inserting the accent as a string if resolution
+                // failed or flavor information is not available.
+                ctx.insert("accent", &accent_value);
             }
         }
 
