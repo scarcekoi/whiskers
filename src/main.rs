@@ -16,7 +16,7 @@ use whiskers::{
     context::merge_values,
     frontmatter, markdown,
     matrix::{self, Matrix},
-    models::{self, HEX_FORMAT},
+    models::{self, HEX_FORMAT, HSL_FORMAT, RGB_FORMAT},
     templating,
 };
 
@@ -26,12 +26,22 @@ fn default_hex_format() -> String {
     "{{r}}{{g}}{{b}}{{z}}".to_string()
 }
 
+fn default_rgb_format() -> String {
+    "{{r}}, {{g}}, {{b}}".to_string()
+}
+
+fn default_hsl_format() -> String {
+    "{{h}}, {{s}}, {{l}}".to_string()
+}
+
 #[derive(Default, Debug, serde::Deserialize)]
 struct TemplateOptions {
     version: Option<(semver::VersionReq, String)>,
     matrix: Option<Matrix>,
     filename: Option<String>,
     hex_format: String,
+    rgb_format: String,
+    hsl_format: String,
     skip_if: Option<String>,
 }
 
@@ -40,7 +50,6 @@ impl TemplateOptions {
         frontmatter: &HashMap<String, tera::Value>,
         only_flavor: Option<FlavorName>,
     ) -> anyhow::Result<Self> {
-        // a `TemplateOptions` object before matrix transformation
         #[derive(serde::Deserialize)]
         struct RawTemplateOptions {
             version: Option<semver::VersionReq>,
@@ -50,6 +59,8 @@ impl TemplateOptions {
             hex_prefix: Option<String>,
             #[serde(default)]
             capitalize_hex: bool,
+            rgb_format: Option<String>,
+            hsl_format: Option<String>,
             skip_if: Option<String>,
         }
 
@@ -86,6 +97,9 @@ impl TemplateOptions {
                 }
             };
 
+            let rgb_format = raw_opts.rgb_format.unwrap_or_else(default_rgb_format);
+            let hsl_format = raw_opts.hsl_format.unwrap_or_else(default_hsl_format);
+
             Ok(Self {
                 version: raw_opts.version.map(|version| {
                     (
@@ -98,11 +112,15 @@ impl TemplateOptions {
                 matrix,
                 filename: raw_opts.filename,
                 hex_format,
+                rgb_format,
+                hsl_format,
                 skip_if: raw_opts.skip_if,
             })
         } else {
             Ok(Self {
                 hex_format: default_hex_format(),
+                rgb_format: default_rgb_format(),
+                hsl_format: default_hsl_format(),
                 ..Default::default()
             })
         }
@@ -170,6 +188,12 @@ fn main() -> anyhow::Result<()> {
     HEX_FORMAT
         .set(template_opts.hex_format)
         .expect("can always set HEX_FORMAT");
+    RGB_FORMAT
+        .set(template_opts.rgb_format)
+        .expect("can always set RGB_FORMAT");
+    HSL_FORMAT
+        .set(template_opts.hsl_format)
+        .expect("can always set HSL_FORMAT");
 
     // build the palette and add it to the templating context
     let palette = models::build_palette(args.color_overrides.as_ref())

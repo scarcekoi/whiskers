@@ -32,15 +32,19 @@ pub struct Color {
     pub order: u32,
     pub accent: bool,
     pub hex: String,
+    pub rgb: String,
+    pub hsl: String,
     pub int24: u32,
     pub uint32: u32,
     pub sint32: i32,
-    pub rgb: RGB,
-    pub hsl: HSL,
     pub opacity: u8,
+    #[serde(skip)]
+    rgb_raw: RGB,
+    #[serde(skip)]
+    hsl_raw: HSL,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
 pub struct RGB {
     pub r: u8,
     pub g: u8,
@@ -48,7 +52,7 @@ pub struct RGB {
     pub channels: [u8; 3],
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
 pub struct HSL {
     pub h: u16,
     pub s: f32,
@@ -63,7 +67,7 @@ pub enum Error {
     ParseHex(#[from] std::num::ParseIntError),
 }
 
-// we have many functions that need to know how to format hex colors.
+// we have many functions that need to know how to format colors.
 // they can't know this at build time, as the format may be provided by the template.
 // we have little to no available state in many of these functions to store this information.
 // these possible solutions were evaluated:
@@ -72,8 +76,11 @@ pub enum Error {
 // 3. store it in a global static, and initialize it when the template frontmatter is read.
 // we opted for the third option, with a convenience macro for accessing it.
 pub static HEX_FORMAT: OnceLock<String> = OnceLock::new();
+pub static RGB_FORMAT: OnceLock<String> = OnceLock::new();
+pub static HSL_FORMAT: OnceLock<String> = OnceLock::new();
+
 macro_rules! format_hex {
-    ($r:expr, $g:expr, $b: expr, $a: expr) => {
+    ($r:expr, $g:expr, $b:expr, $a:expr) => {
         format_hex(
             $r,
             $g,
@@ -84,7 +91,30 @@ macro_rules! format_hex {
     };
 }
 
-/// attempt to canonicalize a hex string, using the provided format string.
+macro_rules! format_rgb {
+    ($r:expr, $g:expr, $b:expr, $a:expr) => {
+        format_rgb(
+            $r,
+            $g,
+            $b,
+            $a,
+            &*RGB_FORMAT.get().expect("RGB_FORMAT was never set"),
+        )
+    };
+}
+
+macro_rules! format_hsl {
+    ($h:expr, $s:expr, $l:expr, $a:expr) => {
+        format_hsl(
+            $h,
+            $s,
+            $l,
+            $a,
+            &*HSL_FORMAT.get().expect("HSL_FORMAT was never set"),
+        )
+    };
+}
+
 fn format_hex(r: u8, g: u8, b: u8, a: u8, hex_format: &str) -> tera::Result<String> {
     Tera::one_off(
         hex_format,
@@ -105,12 +135,36 @@ fn format_hex(r: u8, g: u8, b: u8, a: u8, hex_format: &str) -> tera::Result<Stri
     )
 }
 
-/// produce three values from a given rgb value and opacity:
-/// 1. a 24-bit unsigned integer with the format `0xRRGGBB`
-/// 2. a 32-bit unsigned integer with the format `0xAARRGGBB`
-/// 3. a 32-bit signed integer with the format `0xAARRGGBB`
-///
-/// opacity is optional, and defaults to `0xFF`.
+fn format_rgb(r: u8, g: u8, b: u8, a: u8, rgb_format: &str) -> tera::Result<String> {
+    Tera::one_off(
+        rgb_format,
+        &tera::Context::from_serialize(json!({
+            "r": r,
+            "g": g,
+            "b": b,
+            "a": a,
+            "z": if a == 0xFF { String::new() } else { a.to_string() },
+        }))
+        .expect("hardcoded context is always valid"),
+        true,
+    )
+}
+
+fn format_hsl(h: u16, s: f32, l: f32, a: u8, hsl_format: &str) -> tera::Result<String> {
+    Tera::one_off(
+        hsl_format,
+        &tera::Context::from_serialize(json!({
+            "h": h,
+            "s": s,
+            "l": l,
+            "a": a,
+            "z": if a == 0xFF { String::new() } else { a.to_string() },
+        }))
+        .expect("hardcoded context is always valid"),
+        true,
+    )
+}
+
 fn rgb_to_ints(rgb: &RGB, opacity: Option<u8>) -> (u32, u32, i32) {
     let opacity = opacity.unwrap_or(0xFF);
     let uint24 = u32::from_be_bytes([0x00, rgb.r, rgb.g, rgb.b]);
@@ -119,65 +173,81 @@ fn rgb_to_ints(rgb: &RGB, opacity: Option<u8>) -> (u32, u32, i32) {
     (uint24, uint32, uint32 as i32)
 }
 
+fn rgb_to_hex(rgb: &RGB, opacity: u8) -> tera::Result<String> {
+    format_hex!(rgb.r, rgb.g, rgb.b, opacity)
+}
+
+fn rgb_to_rgb(rgb: &RGB, opacity: u8) -> tera::Result<String> {
+    format_rgb!(rgb.r, rgb.g, rgb.b, opacity)
+}
+
+fn hsl_to_hsl(hsl: &HSL, opacity: u8) -> tera::Result<String> {
+    format_hsl!(hsl.h, hsl.s, hsl.l, opacity)
+}
+
 fn color_from_hex_override(hex: &str, blueprint: &catppuccin::Color) -> Result<Color, Error> {
     let i = u32::from_str_radix(hex, 16)?;
-    let rgb = RGB::new(
+    let rgb_raw = RGB::new(
         ((i >> 16) & 0xFF) as u8,
         ((i >> 8) & 0xFF) as u8,
         (i & 0xFF) as u8,
     );
-    let hsl = farver::rgb(rgb.r, rgb.g, rgb.b).to_hsl();
-    let hex = format_hex!(rgb.r, rgb.g, rgb.b, 0xFF)?;
-    let (int24, uint32, sint32) = rgb_to_ints(&rgb, None);
+    let farver_hsl = farver::rgb(rgb_raw.r, rgb_raw.g, rgb_raw.b).to_hsl();
+    let hsl_raw = HSL {
+        h: farver_hsl.h.degrees(),
+        s: farver_hsl.s.as_f32(),
+        l: farver_hsl.l.as_f32(),
+    };
+    let hex = format_hex!(rgb_raw.r, rgb_raw.g, rgb_raw.b, 0xFF)?;
+    let rgb = format_rgb!(rgb_raw.r, rgb_raw.g, rgb_raw.b, 0xFF)?;
+    let hsl = format_hsl!(hsl_raw.h, hsl_raw.s, hsl_raw.l, 0xFF)?;
+    let (int24, uint32, sint32) = rgb_to_ints(&rgb_raw, None);
     Ok(Color {
         name: blueprint.name.to_string(),
         identifier: blueprint.name.identifier().to_string(),
         order: blueprint.order,
         accent: blueprint.accent,
         hex,
+        rgb,
+        hsl,
         int24,
         uint32,
         sint32,
-        rgb,
-        hsl: HSL {
-            h: hsl.h.degrees(),
-            s: hsl.s.as_f32(),
-            l: hsl.l.as_f32(),
-        },
+        rgb_raw,
+        hsl_raw,
         opacity: 0xFF,
     })
 }
 
 fn color_from_catppuccin(color: &catppuccin::Color) -> tera::Result<Color> {
-    let hex = format_hex!(color.rgb.r, color.rgb.g, color.rgb.b, 0xFF)?;
-    let rgb: RGB = color.rgb.into();
-    let (int24, uint32, sint32) = rgb_to_ints(&rgb, None);
+    let rgb_raw = RGB::new(color.rgb.r, color.rgb.g, color.rgb.b);
+    let hsl_raw = HSL {
+        h: color.hsl.h.round() as u16,
+        s: color.hsl.s as f32,
+        l: color.hsl.l as f32,
+    };
+    let hex = format_hex!(rgb_raw.r, rgb_raw.g, rgb_raw.b, 0xFF)?;
+    let rgb = format_rgb!(rgb_raw.r, rgb_raw.g, rgb_raw.b, 0xFF)?;
+    let hsl = format_hsl!(hsl_raw.h, hsl_raw.s, hsl_raw.l, 0xFF)?;
+    let (int24, uint32, sint32) = rgb_to_ints(&rgb_raw, None);
     Ok(Color {
         name: color.name.to_string(),
         identifier: color.name.identifier().to_string(),
         order: color.order,
         accent: color.accent,
         hex,
+        rgb,
+        hsl,
         int24,
         uint32,
         sint32,
-        rgb: RGB::new(color.rgb.r, color.rgb.g, color.rgb.b),
-        hsl: HSL {
-            h: color.hsl.h.round() as u16,
-            s: color.hsl.s as f32,
-            l: color.hsl.l as f32,
-        },
+        rgb_raw,
+        hsl_raw,
         opacity: 255,
     })
 }
 
-/// Build a [`Palette`] from [`catppuccin::PALETTE`], optionally applying color overrides.
 pub fn build_palette(color_overrides: Option<&ColorOverrides>) -> Result<Palette, Error> {
-    // make a `Color` from a `catppuccin::Color`, taking into account `color_overrides`.
-    // overrides apply in this order:
-    // 1. base color
-    // 2. "all" override
-    // 3. flavor override
     let make_color =
         |color: &catppuccin::Color, flavor_name: catppuccin::FlavorName| -> Result<Color, Error> {
             let flavor_override = color_overrides
@@ -258,57 +328,67 @@ impl<'a> IntoIterator for &'a Flavor {
     }
 }
 
-fn rgb_to_hex(rgb: &RGB, opacity: u8) -> tera::Result<String> {
-    format_hex!(rgb.r, rgb.g, rgb.b, opacity)
-}
-
 impl Color {
     fn from_hsla(hsla: farver::HSLA, blueprint: &Self) -> tera::Result<Self> {
-        let rgb = hsla.to_rgb();
-        let rgb = RGB::new(rgb.r.as_u8(), rgb.g.as_u8(), rgb.b.as_u8());
-        let hsl = HSL {
+        let farver_rgb = hsla.to_rgb();
+        let rgb_raw = RGB::new(
+            farver_rgb.r.as_u8(),
+            farver_rgb.g.as_u8(),
+            farver_rgb.b.as_u8(),
+        );
+        let hsl_raw = HSL {
             h: hsla.h.degrees(),
             s: hsla.s.as_f32(),
             l: hsla.l.as_f32(),
         };
         let opacity = hsla.a.as_u8();
-        let (int24, uint32, sint32) = rgb_to_ints(&rgb, Some(opacity));
+        let hex = rgb_to_hex(&rgb_raw, opacity)?;
+        let rgb = rgb_to_rgb(&rgb_raw, opacity)?;
+        let hsl = hsl_to_hsl(&hsl_raw, opacity)?;
+        let (int24, uint32, sint32) = rgb_to_ints(&rgb_raw, Some(opacity));
         Ok(Self {
             name: blueprint.name.clone(),
             identifier: blueprint.identifier.clone(),
             order: blueprint.order,
             accent: blueprint.accent,
-            hex: rgb_to_hex(&rgb, opacity)?,
+            hex,
+            rgb,
+            hsl,
             int24,
             uint32,
             sint32,
-            rgb,
-            hsl,
+            rgb_raw,
+            hsl_raw,
             opacity,
         })
     }
 
     fn from_rgba(rgba: farver::RGBA, blueprint: &Self) -> tera::Result<Self> {
-        let hsl = rgba.to_hsl();
-        let rgb = RGB::new(rgba.r.as_u8(), rgba.g.as_u8(), rgba.b.as_u8());
-        let hsl = HSL {
-            h: hsl.h.degrees(),
-            s: hsl.s.as_f32(),
-            l: hsl.l.as_f32(),
+        let farver_hsl = rgba.to_hsl();
+        let rgb_raw = RGB::new(rgba.r.as_u8(), rgba.g.as_u8(), rgba.b.as_u8());
+        let hsl_raw = HSL {
+            h: farver_hsl.h.degrees(),
+            s: farver_hsl.s.as_f32(),
+            l: farver_hsl.l.as_f32(),
         };
         let opacity = rgba.a.as_u8();
-        let (int24, uint32, sint32) = rgb_to_ints(&rgb, Some(opacity));
+        let hex = rgb_to_hex(&rgb_raw, opacity)?;
+        let rgb = rgb_to_rgb(&rgb_raw, opacity)?;
+        let hsl = hsl_to_hsl(&hsl_raw, opacity)?;
+        let (int24, uint32, sint32) = rgb_to_ints(&rgb_raw, Some(opacity));
         Ok(Self {
             name: blueprint.name.clone(),
             identifier: blueprint.identifier.clone(),
             order: blueprint.order,
             accent: blueprint.accent,
-            hex: rgb_to_hex(&rgb, opacity)?,
+            hex,
+            rgb,
+            hsl,
             int24,
             uint32,
             sint32,
-            rgb,
-            hsl,
+            rgb_raw,
+            hsl_raw,
             opacity,
         })
     }
@@ -379,10 +459,12 @@ impl Color {
 
     pub fn mod_opacity(&self, opacity: f32) -> tera::Result<Self> {
         let opacity = (opacity * 255.0).round() as u8;
-        let (int24, uint32, sint32) = rgb_to_ints(&self.rgb, Some(opacity));
+        let (int24, uint32, sint32) = rgb_to_ints(&self.rgb_raw, Some(opacity));
         Ok(Self {
             opacity,
-            hex: rgb_to_hex(&self.rgb, opacity)?,
+            hex: rgb_to_hex(&self.rgb_raw, opacity)?,
+            rgb: rgb_to_rgb(&self.rgb_raw, opacity)?,
+            hsl: hsl_to_hsl(&self.hsl_raw, opacity)?,
             int24,
             uint32,
             sint32,
@@ -393,10 +475,12 @@ impl Color {
     pub fn add_opacity(&self, opacity: f32) -> tera::Result<Self> {
         let opacity = (opacity * 255.0).round() as u8;
         let opacity = self.opacity.saturating_add(opacity);
-        let (int24, uint32, sint32) = rgb_to_ints(&self.rgb, Some(opacity));
+        let (int24, uint32, sint32) = rgb_to_ints(&self.rgb_raw, Some(opacity));
         Ok(Self {
             opacity,
-            hex: rgb_to_hex(&self.rgb, opacity)?,
+            hex: rgb_to_hex(&self.rgb_raw, opacity)?,
+            rgb: rgb_to_rgb(&self.rgb_raw, opacity)?,
+            hsl: hsl_to_hsl(&self.hsl_raw, opacity)?,
             int24,
             uint32,
             sint32,
@@ -407,10 +491,12 @@ impl Color {
     pub fn sub_opacity(&self, opacity: f32) -> tera::Result<Self> {
         let opacity = (opacity * 255.0).round() as u8;
         let opacity = self.opacity.saturating_sub(opacity);
-        let (int24, uint32, sint32) = rgb_to_ints(&self.rgb, Some(opacity));
+        let (int24, uint32, sint32) = rgb_to_ints(&self.rgb_raw, Some(opacity));
         Ok(Self {
             opacity,
-            hex: rgb_to_hex(&self.rgb, opacity)?,
+            hex: rgb_to_hex(&self.rgb_raw, opacity)?,
+            rgb: rgb_to_rgb(&self.rgb_raw, opacity)?,
+            hsl: hsl_to_hsl(&self.hsl_raw, opacity)?,
             int24,
             uint32,
             sint32,
@@ -422,9 +508,9 @@ impl Color {
 impl From<&Color> for farver::RGB {
     fn from(c: &Color) -> Self {
         Self {
-            r: farver::Ratio::from_u8(c.rgb.r),
-            g: farver::Ratio::from_u8(c.rgb.g),
-            b: farver::Ratio::from_u8(c.rgb.b),
+            r: farver::Ratio::from_u8(c.rgb_raw.r),
+            g: farver::Ratio::from_u8(c.rgb_raw.g),
+            b: farver::Ratio::from_u8(c.rgb_raw.b),
         }
     }
 }
@@ -432,9 +518,9 @@ impl From<&Color> for farver::RGB {
 impl From<&Color> for farver::RGBA {
     fn from(c: &Color) -> Self {
         Self {
-            r: farver::Ratio::from_u8(c.rgb.r),
-            g: farver::Ratio::from_u8(c.rgb.g),
-            b: farver::Ratio::from_u8(c.rgb.b),
+            r: farver::Ratio::from_u8(c.rgb_raw.r),
+            g: farver::Ratio::from_u8(c.rgb_raw.g),
+            b: farver::Ratio::from_u8(c.rgb_raw.b),
             a: farver::Ratio::from_u8(c.opacity),
         }
     }
@@ -443,9 +529,9 @@ impl From<&Color> for farver::RGBA {
 impl From<&Color> for farver::HSL {
     fn from(c: &Color) -> Self {
         Self {
-            h: farver::Angle::new(c.hsl.h),
-            s: farver::Ratio::from_f32(c.hsl.s),
-            l: farver::Ratio::from_f32(c.hsl.l),
+            h: farver::Angle::new(c.hsl_raw.h),
+            s: farver::Ratio::from_f32(c.hsl_raw.s),
+            l: farver::Ratio::from_f32(c.hsl_raw.l),
         }
     }
 }
@@ -453,9 +539,9 @@ impl From<&Color> for farver::HSL {
 impl From<&Color> for farver::HSLA {
     fn from(c: &Color) -> Self {
         Self {
-            h: farver::Angle::new(c.hsl.h),
-            s: farver::Ratio::from_f32(c.hsl.s),
-            l: farver::Ratio::from_f32(c.hsl.l),
+            h: farver::Angle::new(c.hsl_raw.h),
+            s: farver::Ratio::from_f32(c.hsl_raw.s),
+            l: farver::Ratio::from_f32(c.hsl_raw.l),
             a: farver::Ratio::from_u8(c.opacity),
         }
     }
