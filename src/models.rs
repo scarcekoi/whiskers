@@ -378,7 +378,7 @@ impl Color {
     }
 
     pub fn mod_opacity(&self, opacity: u8) -> tera::Result<Self> {
-        let opacity = (opacity as f32 / 100.0 * 255.0).round() as u8;
+        let opacity = (f32::from(opacity) / 100.0 * 255.0).round() as u8;
         let (int24, uint32, sint32) = rgb_to_ints(&self.rgb, Some(opacity));
         Ok(Self {
             opacity,
@@ -391,7 +391,7 @@ impl Color {
     }
 
     pub fn add_opacity(&self, opacity: u8) -> tera::Result<Self> {
-        let opacity = (opacity as f32 / 100.0 * 255.0).round() as u8;
+        let opacity = (f32::from(opacity) / 100.0 * 255.0).round() as u8;
         let opacity = self.opacity.saturating_add(opacity);
         let (int24, uint32, sint32) = rgb_to_ints(&self.rgb, Some(opacity));
         Ok(Self {
@@ -405,7 +405,7 @@ impl Color {
     }
 
     pub fn sub_opacity(&self, opacity: u8) -> tera::Result<Self> {
-        let opacity = (opacity as f32 / 100.0 * 255.0).round() as u8;
+        let opacity = (f32::from(opacity) / 100.0 * 255.0).round() as u8;
         let opacity = self.opacity.saturating_sub(opacity);
         let (int24, uint32, sint32) = rgb_to_ints(&self.rgb, Some(opacity));
         Ok(Self {
