@@ -742,14 +742,12 @@ where
     P: AsRef<Path>,
 {
     let path = path.as_ref();
-    let expected = std::fs::read(path)
-        .into_diagnostic()
-        .wrap_err_with(|| {
-            format!(
-                "error: Couldn't read {} for comparison against result",
-                path.display()
-            )
-        })?;
+    let expected = std::fs::read(path).into_diagnostic().wrap_err_with(|| {
+        format!(
+            "error: Couldn't read {} for comparison against result",
+            path.display()
+        )
+    })?;
     if encode_output(result.to_string(), encoding) == expected {
         Ok(CheckResult::Pass)
     } else {
