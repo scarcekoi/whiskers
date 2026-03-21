@@ -551,7 +551,30 @@ fn encode_output(result: String, encoding: OutputEncoding) -> Vec<u8> {
             bytes.extend_from_slice(result.as_bytes());
             bytes
         }
+        OutputEncoding::Utf16Le => encode_utf16(result, false, false),
+        OutputEncoding::Utf16LeBom => encode_utf16(result, false, true),
+        OutputEncoding::Utf16Be => encode_utf16(result, true, false),
+        OutputEncoding::Utf16BeBom => encode_utf16(result, true, true),
     }
+}
+
+fn encode_utf16(result: String, big_endian: bool, bom: bool) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(result.len() * 2 + 2);
+    if bom {
+        if big_endian {
+            bytes.extend_from_slice(&[0xFE, 0xFF]);
+        } else {
+            bytes.extend_from_slice(&[0xFF, 0xFE]);
+        }
+    }
+    for unit in result.encode_utf16() {
+        if big_endian {
+            bytes.extend_from_slice(&unit.to_be_bytes());
+        } else {
+            bytes.extend_from_slice(&unit.to_le_bytes());
+        }
+    }
+    bytes
 }
 
 fn write_template(
