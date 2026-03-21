@@ -30,6 +30,18 @@ fn default_hex_format() -> String {
     "{{r}}{{g}}{{b}}{{z}}".to_string()
 }
 
+#[derive(Debug, Default, Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OutputEncoding {
+    #[default]
+    Utf8,
+    Utf8Bom,
+    Utf16Le,
+    Utf16LeBom,
+    Utf16Be,
+    Utf16BeBom,
+}
+
 #[derive(Default, Debug, serde::Deserialize)]
 struct TemplateOptions {
     version: Option<(semver::VersionReq, String)>,
@@ -37,6 +49,7 @@ struct TemplateOptions {
     filename: Option<String>,
     hex_format: String,
     skip_if: Option<String>,
+    encoding: OutputEncoding,
 }
 
 impl TemplateOptions {
@@ -55,6 +68,8 @@ impl TemplateOptions {
             #[serde(default)]
             capitalize_hex: bool,
             skip_if: Option<String>,
+            #[serde(default)]
+            encoding: OutputEncoding,
         }
 
         if let Some(opts_section) = frontmatter.get(FRONTMATTER_OPTIONS_SECTION) {
@@ -105,6 +120,7 @@ impl TemplateOptions {
                 filename: raw_opts.filename,
                 hex_format,
                 skip_if: raw_opts.skip_if,
+                encoding: raw_opts.encoding,
             })
         } else {
             Ok(Self {
@@ -179,6 +195,7 @@ fn main() -> miette::Result<()> {
             matrix,
             &filename_template,
             template_opts.skip_if.as_deref(),
+            template_opts.encoding,
             &ctx,
             &palette,
             &tera,
@@ -201,6 +218,7 @@ fn main() -> miette::Result<()> {
             check,
             template_opts.filename,
             template_opts.skip_if.as_deref(),
+            template_opts.encoding,
             args.dry_run,
         )
         .context("Single-output render failed")?;
@@ -525,7 +543,23 @@ fn template_is_compatible(template_opts: &TemplateOptions) -> bool {
     true
 }
 
-fn write_template(dry_run: bool, filename: &str, result: String) -> miette::Result<()> {
+fn encode_output(result: String, encoding: OutputEncoding) -> Vec<u8> {
+    match encoding {
+        OutputEncoding::Utf8 => result.into_bytes(),
+        OutputEncoding::Utf8Bom => {
+            let mut bytes = vec![0xEF, 0xBB, 0xBF];
+            bytes.extend_from_slice(result.as_bytes());
+            bytes
+        }
+    }
+}
+
+fn write_template(
+    dry_run: bool,
+    filename: &str,
+    result: String,
+    encoding: OutputEncoding,
+) -> miette::Result<()> {
     let filename = Path::new(&filename);
 
     if dry_run || cfg!(test) {
@@ -536,7 +570,7 @@ fn write_template(dry_run: bool, filename: &str, result: String) -> miette::Resu
         );
     } else {
         maybe_create_parents(filename)?;
-        std::fs::write(filename, result)
+        std::fs::write(filename, encode_output(result, encoding))
             .into_diagnostic()
             .wrap_err_with(|| format!("Couldn't write to {}", filename.display()))?;
     }
@@ -551,6 +585,7 @@ fn render_single_output(
     check: Option<PathBuf>,
     filename: Option<String>,
     skip_if: Option<&str>,
+    encoding: OutputEncoding,
     dry_run: bool,
 ) -> miette::Result<()> {
     if should_skip(skip_if, ctx)? {
@@ -564,13 +599,13 @@ fn render_single_output(
 
     if let Some(path) = check {
         if matches!(
-            check_result_with_file(&path, &result).context("Check mode failed")?,
+            check_result_with_file(&path, &result, encoding).context("Check mode failed")?,
             CheckResult::Fail
         ) {
             std::process::exit(1);
         }
     } else if let Some(filename) = filename {
-        write_template(dry_run, &filename, result)?;
+        write_template(dry_run, &filename, result, encoding)?;
     } else {
         print!("{result}");
     }
@@ -583,6 +618,7 @@ fn render_multi_output(
     matrix: HashMap<String, Vec<String>>,
     filename_template: &str,
     skip_if: Option<&str>,
+    encoding: OutputEncoding,
     ctx: &tera::Context,
     palette: &models::Palette,
     tera: &tera::Tera,
@@ -629,10 +665,12 @@ fn render_multi_output(
             .wrap_err("Filename template render failed")?;
 
         if args.check.is_some() {
-            check_results
-                .push(check_result_with_file(&filename, &result).context("Check mode failed")?);
+            check_results.push(
+                check_result_with_file(&filename, &result, encoding)
+                    .context("Check mode failed")?,
+            );
         } else {
-            write_template(args.dry_run, &filename, result)?;
+            write_template(args.dry_run, &filename, result, encoding)?;
         }
     }
 
@@ -671,12 +709,16 @@ enum CheckResult {
     Fail,
 }
 
-fn check_result_with_file<P>(path: &P, result: &str) -> miette::Result<CheckResult>
+fn check_result_with_file<P>(
+    path: &P,
+    result: &str,
+    encoding: OutputEncoding,
+) -> miette::Result<CheckResult>
 where
     P: AsRef<Path>,
 {
     let path = path.as_ref();
-    let expected = std::fs::read_to_string(path)
+    let expected = std::fs::read(path)
         .into_diagnostic()
         .wrap_err_with(|| {
             format!(
@@ -684,7 +726,7 @@ where
                 path.display()
             )
         })?;
-    if *result == expected {
+    if encode_output(result.to_string(), encoding) == expected {
         Ok(CheckResult::Pass)
     } else {
         err(format!("Output does not match {}", path.display()));
