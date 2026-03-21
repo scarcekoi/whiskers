@@ -551,14 +551,14 @@ fn encode_output(result: String, encoding: OutputEncoding) -> Vec<u8> {
             bytes.extend_from_slice(result.as_bytes());
             bytes
         }
-        OutputEncoding::Utf16Le => encode_utf16(result, false, false),
-        OutputEncoding::Utf16LeBom => encode_utf16(result, false, true),
-        OutputEncoding::Utf16Be => encode_utf16(result, true, false),
-        OutputEncoding::Utf16BeBom => encode_utf16(result, true, true),
+        OutputEncoding::Utf16Le => encode_utf16(&result, false, false),
+        OutputEncoding::Utf16LeBom => encode_utf16(&result, false, true),
+        OutputEncoding::Utf16Be => encode_utf16(&result, true, false),
+        OutputEncoding::Utf16BeBom => encode_utf16(&result, true, true),
     }
 }
 
-fn encode_utf16(result: String, big_endian: bool, bom: bool) -> Vec<u8> {
+fn encode_utf16(result: &str, big_endian: bool, bom: bool) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(result.len() * 2 + 2);
     if bom {
         if big_endian {
@@ -601,6 +601,7 @@ fn write_template(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_single_output(
     ctx: &tera::Context,
     tera: &tera::Tera,
