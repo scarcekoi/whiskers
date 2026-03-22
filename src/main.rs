@@ -624,6 +624,7 @@ fn render_multi_output(
             ctx.insert("accent", identifier);
             if let Some(flavor_value) = ctx.get("flavor") {
                 let flavor: models::Flavor = tera::from_value(flavor_value.clone())
+                    .into_diagnostic()
                     .context("Failed to deserialize flavor from context")?;
                 if let Some(color) = flavor.colors.get(identifier.as_str()) {
                     ctx.insert("accent", color);
