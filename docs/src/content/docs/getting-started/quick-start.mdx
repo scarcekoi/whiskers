@@ -16,7 +16,7 @@ Let's get started!
 ## Prerequisites
 
 - Whiskers ([Installation](/getting-started/installation))
-- Your favourite editor/terminal.
+- Your favorite editor/terminal.
   - **(Optional)** Download an extension from [Editor Integrations](/resources/editor-integrations)
     to make writing templates nicer.
 
@@ -33,7 +33,7 @@ This template will generate a file containing all the colors of a single flavor.
    ```yaml title="flavor.tera"
    ---
    whiskers:
-     version: "^2.8.0"
+     version: "^2.9.0"
    ---
    ```
 
@@ -46,7 +46,7 @@ This template will generate a file containing all the colors of a single flavor.
    ```markdown title="flavor.tera" ins={5-23}
    ---
    whiskers:
-     version: "^2.8.0"
+     version: "^2.9.0"
    ---
    <details open>
    <summary>Catppuccin {{flavor.name}}</summary>
@@ -93,7 +93,7 @@ This template will generate a file containing all the colors of a single flavor.
    ```yaml title="flavor.tera" ins={4}
    ---
    whiskers:
-     version: "^2.8.0"
+     version: "^2.9.0"
      filename: "flavor.md"
    ---
    ```
@@ -150,7 +150,7 @@ Catppuccin palette.
    ```markdown title="palette.tera" "palette.md" ins={6, 28}
    ---
    whiskers:
-     version: "^2.8.0"
+     version: "^2.9.0"
      filename: "palette.md"
    ---
    {%- for _, flavor in flavors %}
@@ -186,7 +186,7 @@ Catppuccin palette.
 
    When the [`--flavor/-f`](/reference/cli-options/#-f---flavor-flavor) flag isn't
    being used, Whiskers renders the template using
-   [Multi-Flavor Mode](/concepts/multi-flavor).
+   [multi-flavor mode](/concepts/multi-flavor).
 
 1. View the `palette.md` file, and confirm that a markdown table has been
    generated for each flavor.

@@ -134,7 +134,7 @@ pub fn all_filters() -> Vec<Filter> {
             description: "Add a value to a color".to_string(),
             examples: vec![
                 filter_example!(red | add(hue=30) => "#ff6666"),
-                filter_example!(red | add(saturation=0.5) => "#ff6666"),
+                filter_example!(red | add(saturation=50) => "#ff6666"),
             ],
         },
         Filter {
@@ -173,7 +173,7 @@ pub fn all_filters() -> Vec<Filter> {
         },
         Filter {
             name: "hex".to_string(),
-            description: "Fetch a colour's hex representation. Shortcut for `get(key=\"hex\")`"
+            description: "Fetch a color's hex representation. Shortcut for `get(key=\"hex\")`"
                 .to_string(),
             examples: vec![filter_example!(red | hex => "d20f39")],
         },
