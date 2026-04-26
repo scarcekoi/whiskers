@@ -130,7 +130,7 @@ fn rgb_to_ints(rgb: &RGB, opacity: Option<u8>) -> (u32, u32, i32) {
 fn rgb_to_oklch(r: u8, g: u8, b: u8) -> OKLCH {
     // sRGB -> linear RGB
     let linearize = |c: u8| {
-        let c = c as f64 / 255.0;
+        let c = f64::from(c) / 255.0;
         if c <= 0.04045 {
             c / 12.92
         } else {
@@ -140,17 +140,17 @@ fn rgb_to_oklch(r: u8, g: u8, b: u8) -> OKLCH {
     let (r, g, b) = (linearize(r), linearize(g), linearize(b));
 
     // linear RGB -> LMS (Oklab intermediate)
-    let l = (0.412_221_470_8 * r + 0.536_332_536_3 * g + 0.051_445_992_9 * b).cbrt();
-    let m = (0.211_903_498_2 * r + 0.680_699_545_1 * g + 0.107_396_956_6 * b).cbrt();
-    let s = (0.088_302_461_9 * r + 0.281_718_837_6 * g + 0.629_978_700_5 * b).cbrt();
+    let l = 0.051_445_992_9f64.mul_add(b, 0.412_221_470_8f64.mul_add(r, 0.536_332_536_3 * g)).cbrt();
+    let m = 0.107_396_956_6f64.mul_add(b, 0.211_903_498_2f64.mul_add(r, 0.680_699_545_1 * g)).cbrt();
+    let s = 0.629_978_700_5f64.mul_add(b, 0.088_302_461_9f64.mul_add(r, 0.281_718_837_6 * g)).cbrt();
 
     // LMS -> OKLab
-    let lab_l = 0.210_454_255_3 * l + 0.793_617_785_0 * m - 0.004_072_046_8 * s;
-    let lab_a = 1.977_998_495_1 * l - 2.428_592_205_0 * m + 0.450_593_709_9 * s;
-    let lab_b = 0.025_904_037_1 * l + 0.782_771_766_2 * m - 0.808_675_766_0 * s;
+    let lab_l = 0.004_072_046_8f64.mul_add(-s, 0.210_454_255_3f64.mul_add(l, 0.793_617_785_0 * m));
+    let lab_a = 0.450_593_709_9f64.mul_add(s, 1.977_998_495_1f64.mul_add(l, -(2.428_592_205_0 * m)));
+    let lab_b = 0.808_675_766_0f64.mul_add(-s, 0.025_904_037_1f64.mul_add(l, 0.782_771_766_2 * m));
 
     // OKLab -> OKLCH
-    let c = (lab_a * lab_a + lab_b * lab_b).sqrt();
+    let c = lab_a.hypot(lab_b);
     let h = lab_b.atan2(lab_a).to_degrees();
     let h = if h < 0.0 { h + 360.0 } else { h };
 
@@ -187,11 +187,7 @@ fn color_from_hex_override(hex: &str, blueprint: &catppuccin::Color) -> Result<C
             s: hsl.s.as_f32(),
             l: hsl.l.as_f32(),
         },
-        oklch: OKLCH {
-            l: oklch.l,
-            c: oklch.c,
-            h: oklch.h,
-        },
+        oklch,
         opacity: 0xFF,
     })
 }
