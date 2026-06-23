@@ -114,6 +114,13 @@ pub fn all_functions() -> Vec<Function> {
             examples: vec![function_example!(css_hsla(color=red) => "hsla(347, 87%, 44%, 1.00)")],
         },
         Function {
+            name: "css_oklch".to_string(),
+            description: "Convert a color to an OKLCH CSS string".to_string(),
+            examples: vec![
+                function_example!(css_oklch(color=red) => "oklch(0.755592 0.12970214 2.764165)"),
+            ],
+        },
+        Function {
             name: "rgb_array".to_string(),
             description: "Convert a color to an array of RGB values".to_string(),
             examples: vec![function_example!(rgb_array(color=red) => "[210, 15, 57]")],
@@ -198,6 +205,13 @@ pub fn all_filters() -> Vec<Filter> {
             name: "css_hsla".to_string(),
             description: "Convert a color to an HSLA CSS string".to_string(),
             examples: vec![filter_example!(red | css_hsla => "hsla(347, 87%, 44%, 1.00)")],
+        },
+        Filter {
+            name: "css_oklch".to_string(),
+            description: "Convert a color to an OKLCH CSS string".to_string(),
+            examples: vec![
+                filter_example!(red | css_oklch => "oklch(0.755592 0.12970214 2.764165)"),
+            ],
         },
         Filter {
             name: "rgb_array".to_string(),
