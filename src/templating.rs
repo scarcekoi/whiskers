@@ -121,11 +121,6 @@ pub fn all_functions() -> Vec<Function> {
             ],
         },
         Function {
-            name: "rgb_array".to_string(),
-            description: "Convert a color to an array of RGB values".to_string(),
-            examples: vec![function_example!(rgb_array(color=red) => "[210, 15, 57]")],
-        },
-        Function {
             name: "read_file".to_string(),
             description:
                 "Read and include the contents of a file, path is relative to the template file"
@@ -212,11 +207,6 @@ pub fn all_filters() -> Vec<Filter> {
             examples: vec![
                 filter_example!(red | css_oklch => "oklch(0.755592 0.12970214 2.764165)"),
             ],
-        },
-        Filter {
-            name: "rgb_array".to_string(),
-            description: "Convert a color to an array of RGB values".to_string(),
-            examples: vec![filter_example!(red | rgb_array => "[210, 15, 57]")],
         },
     ]
 }
