@@ -27,17 +27,32 @@ pub fn from_values(
     values
         .into_iter()
         .map(|v| match v {
-            tera::Value::String(s) => {
-                let iterable = iterables
-                    .get(s.as_str())
-                    .ok_or_else(|| Error::UnknownIterable { name: s.clone() })?;
-                Ok((s, iterable.clone()))
+            _ if v.as_str().is_some() => {
+                let s = v.as_str().unwrap();
+
+                let iterable = iterables.get(s).ok_or_else(|| Error::UnknownIterable {
+                    name: s.to_string(),
+                })?;
+                Ok((s.to_string(), iterable.clone()))
             }
-            tera::Value::Object(o) => {
+            _ if v.as_map().is_some() => {
+                let o = v.into_map().unwrap();
+
                 let (key, value) = o.into_iter().next().ok_or(Error::InvalidObjectElement)?;
-                let value: Vec<String> =
-                    tera::from_value(value).map_err(|_| Error::InvalidObjectElement)?;
-                Ok((key, value))
+                let value: Vec<String> = value
+                    .as_array()
+                    .ok_or(Error::InvalidObjectElement)?
+                    .iter()
+                    .map(|v| {
+                        v.as_str()
+                            .map(str::to_string)
+                            .ok_or(Error::InvalidObjectElement)
+                    })
+                    .collect::<Result<Vec<String>, Error>>()?;
+                Ok((
+                    key.as_str().ok_or(Error::InvalidObjectElement)?.to_string(),
+                    value,
+                ))
             }
             _ => Err(Error::InvalidElement),
         })
