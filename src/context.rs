@@ -3,15 +3,18 @@
 pub fn merge_values(a: &tera::Value, b: &tera::Value) -> tera::Value {
     match (a, b) {
         // if both are objects, merge them
-        (tera::Value::Object(a), tera::Value::Object(b)) => {
-            let mut result = a.clone();
-            for (k, v) in b {
+        _ if a.as_map().is_some() && b.as_map().is_some() => {
+            let mut result = a.clone().into_map().unwrap();
+            for (k, v) in b.as_map().unwrap() {
                 result.insert(
                     k.clone(),
-                    merge_values(a.get(k).unwrap_or(&tera::Value::Null), v),
+                    merge_values(
+                        a.as_map().unwrap().get(k).unwrap_or(&tera::Value::none()),
+                        v,
+                    ),
                 );
             }
-            tera::Value::Object(result)
+            result.into()
         }
         // otherwise, use the second value
         (_, b) => b.clone(),
@@ -26,26 +29,24 @@ mod tests {
 
     #[test]
     fn test_merge_values() {
-        let a = tera::to_value(json!({
+        let a = tera::Value::from_serializable(&json!({
             "a": 1,
             "b": {
                 "c": 2,
                 "d": 3,
             },
-        }))
-        .expect("test value is always valid");
-        let b = tera::to_value(json!({
+        }));
+        let b = tera::Value::from_serializable(&json!({
             "b": {
                 "c": 4,
                 "e": 5,
             },
             "f": 6,
-        }))
-        .expect("test value is always valid");
+        }));
         let result = merge_values(&a, &b);
         assert_eq!(
             result,
-            tera::to_value(json!({
+            tera::Value::from_serializable(&json!({
                 "a": 1,
                 "b": {
                     "c": 4,
@@ -54,7 +55,6 @@ mod tests {
                 },
                 "f": 6,
             }))
-            .expect("test value is always valid")
         );
     }
 }
