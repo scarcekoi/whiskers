@@ -27,11 +27,15 @@ pub fn parse(input: &str) -> Result<Document, Error> {
     };
 
     Ok(Document {
-        frontmatter: serde_yaml::from_str(frontmatter).map_err(|e| Error::InvalidYaml {
-            line: e.location().map(|l| l.line()).unwrap_or_default(),
-            column: e.location().map(|l| l.column()).unwrap_or_default(),
-            message: e.to_string(),
-        })?,
+        frontmatter: serde_yaml::from_str::<HashMap<String, serde_yaml::Value>>(frontmatter)
+            .map_err(|e| Error::InvalidYaml {
+                line: e.location().map(|l| l.line()).unwrap_or_default(),
+                column: e.location().map(|l| l.column()).unwrap_or_default(),
+                message: e.to_string(),
+            })?
+            .into_iter()
+            .map(|(k, v)| (k, tera::Value::from_serializable(&v)))
+            .collect(),
         body: body.to_string(),
     })
 }
