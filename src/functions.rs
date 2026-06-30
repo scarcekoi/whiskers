@@ -1,89 +1,86 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    fs,
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, fs, path::PathBuf};
+
+use serde::Deserialize as _;
+use tera::Kwargs;
 
 use crate::models::Color;
 
-pub fn if_fn(args: &HashMap<String, tera::Value>) -> Result<tera::Value, tera::Error> {
-    let cond = args
-        .get("cond")
-        .ok_or_else(|| tera::Error::msg("cond is required"))?
-        .as_bool()
-        .ok_or_else(|| tera::Error::msg("cond must be a boolean"))?;
-    let t = args
-        .get("t")
-        .ok_or_else(|| tera::Error::msg("t is required"))?
-        .clone();
-    let f = args
-        .get("f")
-        .ok_or_else(|| tera::Error::msg("f is required"))?
-        .clone();
+pub fn if_fn(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
+    let cond = kwargs
+        .get::<bool>("cond")?
+        .ok_or_else(|| tera::Error::message("cond is required"))?;
+    let t = kwargs
+        .get::<tera::Value>("t")?
+        .ok_or_else(|| tera::Error::message("t is required"))?;
+    let f = kwargs
+        .get::<tera::Value>("f")?
+        .ok_or_else(|| tera::Error::message("f is required"))?;
 
     Ok(if cond { t } else { f })
 }
 
-pub fn object(args: &HashMap<String, tera::Value>) -> Result<tera::Value, tera::Error> {
+pub fn object(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
     // sorting the args gives us stable output
-    let args: BTreeMap<_, _> = args.iter().collect();
-    Ok(tera::to_value(args)?)
+    let kwargs: BTreeMap<_, _> = kwargs.deserialize::<BTreeMap<String, serde_json::Value>>()?;
+    Ok(tera::Value::from_serializable(&kwargs))
 }
 
-pub fn css_rgb(args: &HashMap<String, tera::Value>) -> Result<tera::Value, tera::Error> {
-    let color: Color = tera::from_value(
-        args.get("color")
-            .ok_or_else(|| tera::Error::msg("color is required"))?
-            .clone(),
-    )?;
+pub fn css_rgb(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
+    let color: Color = Color::deserialize(
+        kwargs
+            .get::<&tera::Value>("color")?
+            .ok_or_else(|| tera::Error::message("color is required"))?,
+    )
+    .map_err(|e| tera::Error::message(e.to_string()))?;
 
     let color: farver::RGB = (&color).into();
-    Ok(tera::to_value(color.to_string())?)
+    Ok(tera::Value::from_serializable(&color.to_string()))
 }
 
-pub fn css_rgba(args: &HashMap<String, tera::Value>) -> Result<tera::Value, tera::Error> {
-    let color: Color = tera::from_value(
-        args.get("color")
-            .ok_or_else(|| tera::Error::msg("color is required"))?
-            .clone(),
-    )?;
+pub fn css_rgba(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
+    let color: Color = Color::deserialize(
+        kwargs
+            .get::<&tera::Value>("color")?
+            .ok_or_else(|| tera::Error::message("color is required"))?,
+    )
+    .map_err(|e| tera::Error::message(e.to_string()))?;
     let color: farver::RGBA = (&color).into();
-    Ok(tera::to_value(color.to_string())?)
+    Ok(tera::Value::from_serializable(&color.to_string()))
 }
 
-pub fn css_hsl(args: &HashMap<String, tera::Value>) -> Result<tera::Value, tera::Error> {
-    let color: Color = tera::from_value(
-        args.get("color")
-            .ok_or_else(|| tera::Error::msg("color is required"))?
-            .clone(),
-    )?;
+pub fn css_hsl(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
+    let color: Color = Color::deserialize(
+        kwargs
+            .get::<&tera::Value>("color")?
+            .ok_or_else(|| tera::Error::message("color is required"))?,
+    )
+    .map_err(|e| tera::Error::message(e.to_string()))?;
 
     let color: farver::HSL = (&color).into();
-    Ok(tera::to_value(color.to_string())?)
+    Ok(tera::Value::from_serializable(&color.to_string()))
 }
 
-pub fn css_hsla(args: &HashMap<String, tera::Value>) -> Result<tera::Value, tera::Error> {
-    let color: Color = tera::from_value(
-        args.get("color")
-            .ok_or_else(|| tera::Error::msg("color is required"))?
-            .clone(),
-    )?;
+pub fn css_hsla(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
+    let color: Color = Color::deserialize(
+        kwargs
+            .get::<&tera::Value>("color")?
+            .ok_or_else(|| tera::Error::message("color is required"))?,
+    )
+    .map_err(|e| tera::Error::message(e.to_string()))?;
     let color: farver::HSLA = (&color).into();
-    Ok(tera::to_value(color.to_string())?)
+    Ok(tera::Value::from_serializable(&color.to_string()))
 }
 
 pub fn read_file_handler(
     template_directory: PathBuf,
-) -> impl Fn(&HashMap<String, tera::Value>) -> Result<tera::Value, tera::Error> {
-    move |args| -> Result<tera::Value, tera::Error> {
-        let path: String = tera::from_value(
-            args.get("path")
-                .ok_or_else(|| tera::Error::msg("path is required"))?
-                .clone(),
-        )?;
+) -> impl Fn(Kwargs, &tera::State) -> Result<tera::Value, tera::Error> {
+    move |kwargs, _: &tera::State| -> Result<tera::Value, tera::Error> {
+        let path: String = kwargs
+            .get::<String>("path")?
+            .ok_or_else(|| tera::Error::message("path is required"))?;
         let path = template_directory.join(path);
         let contents = fs::read_to_string(&path)
-            .map_err(|_| format!("Failed to open file {}", path.display()))?;
-        Ok(tera::to_value(contents)?)
+            .map_err(|_| format!("Failed to open file {}", path.display()));
+        Ok(tera::Value::from_serializable(&contents))
     }
 }
