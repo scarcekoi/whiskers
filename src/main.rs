@@ -11,6 +11,7 @@ use clap::Parser as _;
 use encoding_rs_io::DecodeReaderBytes;
 use itertools::Itertools;
 use miette::{miette, Context as _, IntoDiagnostic};
+use serde::Deserialize as _;
 use whiskers::{
     cli::{Args, OutputFormat},
     context::merge_values,
@@ -48,7 +49,7 @@ impl TemplateOptions {
         #[derive(serde::Deserialize)]
         struct RawTemplateOptions {
             version: Option<semver::VersionReq>,
-            matrix: Option<Vec<tera::Value>>,
+            matrix: Option<Vec<serde_yaml::Value>>,
             filename: Option<String>,
             hex_format: Option<String>,
             hex_prefix: Option<String>,
@@ -58,13 +59,19 @@ impl TemplateOptions {
         }
 
         if let Some(opts_section) = frontmatter.get(FRONTMATTER_OPTIONS_SECTION) {
-            let raw_opts: RawTemplateOptions = tera::from_value(opts_section.clone())
+            let raw_opts: RawTemplateOptions = RawTemplateOptions::deserialize(opts_section)
                 .into_diagnostic()
                 .wrap_err("Frontmatter `whiskers` section is invalid")?;
 
             let matrix = raw_opts
                 .matrix
-                .map(|m| matrix::from_values(m, only_flavor))
+                .map(|m| {
+                    let converted: Vec<tera::Value> = m
+                        .into_iter()
+                        .map(|v| tera::Value::from_serializable(&v))
+                        .collect();
+                    matrix::from_values(converted, only_flavor)
+                })
                 .transpose()
                 .into_diagnostic()
                 .wrap_err("Frontmatter matrix is invalid")?;
@@ -96,7 +103,12 @@ impl TemplateOptions {
                 version: raw_opts.version.map(|version| {
                     (
                         version,
-                        opts_section["version"].as_str().map(String::from).expect(
+                        opts_section
+                            .as_map()
+                            .and_then(|m| m.get(&tera::value::Key::from("version")))
+                            .and_then(|v| v.as_str())
+                            .map(String::from)
+                            .expect(
                             "version string is guaranteed to be Some if `raw_opts.version` is Some",
                         ),
                     )
@@ -219,12 +231,12 @@ fn add_palette_to_tera_context(
     ctx.insert("flavors", &palette.flavors);
     if let Some(flavor) = args.flavor {
         let flavor: catppuccin::FlavorName = flavor.into();
-        let flavor = &palette.flavors[flavor.identifier()];
-        ctx.insert("flavor", flavor);
+        let flavor = palette.flavors[flavor.identifier()].clone();
+        ctx.insert("flavor", &flavor);
 
         // also throw in the flavor's colors for convenience
-        for (_, color) in flavor {
-            ctx.insert(&color.identifier, &color);
+        for (_, color) in &flavor {
+            ctx.insert(color.identifier.clone(), &color);
         }
     }
     Ok(palette)
@@ -237,25 +249,22 @@ fn make_tera_context(
 ) -> miette::Result<tera::Context> {
     if let Some(ref overrides) = args.overrides {
         for (key, value) in overrides {
+            let value = tera::Value::from_serializable(value);
             frontmatter
                 .entry(key.clone())
                 .and_modify(|v| {
-                    *v = merge_values(v, value);
+                    *v = merge_values(v, &value);
                 })
-                .or_insert(
-                    tera::to_value(value)
-                        .into_diagnostic()
-                        .wrap_err_with(|| format!("Value of {key} override is invalid"))?,
-                );
+                .or_insert(tera::Value::from_serializable(&value));
 
             // overrides also work on matrix iterables
             if let Some(ref mut matrix) = template_opts.matrix {
-                override_matrix(matrix, value, key)?;
+                override_matrix(matrix, &value, key)?;
             }
         }
     }
     let mut ctx = tera::Context::new();
-    for (key, value) in &frontmatter {
+    for (key, value) in frontmatter {
         ctx.insert(key, &value);
     }
     Ok(ctx)
@@ -609,7 +618,7 @@ fn render_multi_output(
 
                 // also throw in the flavor's colors for convenience
                 for (_, color) in flavor {
-                    ctx.insert(&color.identifier, &color);
+                    ctx.insert(color.identifier.clone(), &color);
                 }
             } else {
                 ctx.insert(key, &value);
