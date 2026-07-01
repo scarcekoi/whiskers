@@ -19,10 +19,10 @@ pub enum Error {
 // matrix in frontmatter is a list of strings or objects.
 // objects must have a single key and an array of strings as the value.
 // string array elements are substituted with the array from `iterables`.
-//
-// # Panics
-//
-// When a value that should be a string isn't (
+///
+/// # Panics
+///
+/// When a value that should be a string isn't
 pub fn from_values(
     values: Vec<tera::Value>,
     only_flavor: Option<FlavorName>,
