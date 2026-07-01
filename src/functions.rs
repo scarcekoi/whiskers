@@ -80,7 +80,8 @@ pub fn read_file_handler(
             .ok_or_else(|| tera::Error::message("path is required"))?;
         let path = template_directory.join(path);
         let contents = fs::read_to_string(&path)
-            .map_err(|_| format!("Failed to open file {}", path.display()));
+            .map_err(|_| format!("Failed to open file {}", path.display()))
+            .map_err(|e| tera::Error::message(e.to_string()))?;
         Ok(tera::Value::from_serializable(&contents))
     }
 }
