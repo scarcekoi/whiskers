@@ -7,7 +7,7 @@ rgb({{ v.r }}, {{ v.g }}, {{ v.b }})
 {%- endcomponent -%}
 
 {%- component css_hsl(v) -%}
-hsl({{ v.h | round }}, {{ v.s * 100 | round }}%, {{ v.l * 100 | round }}%)
+hsl({{ v.h | round }}, {{ (v.s * 100) | round }}%, {{ (v.l * 100) | round }}%)
 {%- endcomponent -%}
 
 {% for flavor_key, flavor in flavors %}
