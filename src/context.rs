@@ -1,20 +1,19 @@
 /// Recursively merge two tera values into one.
+///
+/// # Panics
+///
+/// When either a or b is not a map
 #[must_use]
 pub fn merge_values(a: &tera::Value, b: &tera::Value) -> tera::Value {
     match (a, b) {
         // if both are objects, merge them
         _ if a.as_map().is_some() && b.as_map().is_some() => {
             let mut result = a.clone().into_map().expect("a is a map");
+            let none = tera::Value::none();
             for (k, v) in b.as_map().expect("b is a map") {
                 result.insert(
                     k.clone(),
-                    merge_values(
-                        a.as_map()
-                            .expect("a is a map")
-                            .get(k)
-                            .unwrap_or(&tera::Value::none()),
-                        v,
-                    ),
+                    merge_values(a.as_map().expect("a is a map").get(k).unwrap_or(&none), v),
                 );
             }
             result.into()
