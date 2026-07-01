@@ -255,7 +255,7 @@ fn make_tera_context(
                 .and_modify(|v| {
                     *v = merge_values(v, &value);
                 })
-                .or_insert(tera::Value::from_serializable(&value));
+                .or_insert_with(|| tera::Value::from_serializable(&value));
 
             // overrides also work on matrix iterables
             if let Some(ref mut matrix) = template_opts.matrix {
