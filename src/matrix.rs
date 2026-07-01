@@ -28,7 +28,7 @@ pub fn from_values(
         .into_iter()
         .map(|v| match v {
             _ if v.as_str().is_some() => {
-                let s = v.as_str().unwrap();
+                let s = v.as_str().expect("v is a string");
 
                 let iterable = iterables.get(s).ok_or_else(|| Error::UnknownIterable {
                     name: s.to_string(),
@@ -36,7 +36,7 @@ pub fn from_values(
                 Ok((s.to_string(), iterable.clone()))
             }
             _ if v.as_map().is_some() => {
-                let o = v.into_map().unwrap();
+                let o = v.into_map().expect("v is a map");
 
                 let (key, value) = o.into_iter().next().ok_or(Error::InvalidObjectElement)?;
                 let value: Vec<String> = value
