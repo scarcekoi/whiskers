@@ -87,7 +87,7 @@ pub fn read_file_handler(
         let path = template_directory.join(path);
         let contents = fs::read_to_string(&path)
             .map_err(|_| format!("Failed to open file {}", path.display()))
-            .map_err(|e| tera::Error::message(e.to_string()))?;
+            .map_err(tera::Error::message)?;
         Ok(tera::Value::from_serializable(&contents))
     }
 }
