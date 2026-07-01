@@ -5,6 +5,7 @@ use tera::Kwargs;
 
 use crate::models::Color;
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn if_fn(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
     let cond = kwargs
         .get::<bool>("cond")?
@@ -19,12 +20,14 @@ pub fn if_fn(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error
     Ok(if cond { t } else { f })
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn object(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
     // sorting the args gives us stable output
     let kwargs: BTreeMap<_, _> = kwargs.deserialize::<BTreeMap<String, serde_json::Value>>()?;
     Ok(tera::Value::from_serializable(&kwargs))
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn css_rgb(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
     let color: Color = Color::deserialize(
         kwargs
@@ -37,6 +40,7 @@ pub fn css_rgb(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Err
     Ok(tera::Value::from_serializable(&color.to_string()))
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn css_rgba(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
     let color: Color = Color::deserialize(
         kwargs
@@ -48,6 +52,7 @@ pub fn css_rgba(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Er
     Ok(tera::Value::from_serializable(&color.to_string()))
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn css_hsl(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
     let color: Color = Color::deserialize(
         kwargs
@@ -60,6 +65,7 @@ pub fn css_hsl(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Err
     Ok(tera::Value::from_serializable(&color.to_string()))
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn css_hsla(kwargs: Kwargs, _: &tera::State) -> Result<tera::Value, tera::Error> {
     let color: Color = Color::deserialize(
         kwargs

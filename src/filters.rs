@@ -5,6 +5,7 @@ use serde::Deserialize as _;
 
 use crate::models::Color;
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn mix(
     value: &tera::Value,
     kwargs: tera::Kwargs,
@@ -24,6 +25,7 @@ pub fn mix(
     Ok(tera::Value::from_serializable(&result))
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn modify(
     value: &tera::Value,
     kwargs: tera::Kwargs,
@@ -48,6 +50,7 @@ pub fn modify(
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn add(
     value: &tera::Value,
     kwargs: tera::Kwargs,
@@ -72,6 +75,7 @@ pub fn add(
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn sub(
     value: &tera::Value,
     kwargs: tera::Kwargs,
@@ -125,6 +129,7 @@ pub fn urlencode_lzma(
     Ok(tera::Value::from_serializable(&encoded))
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn trunc(
     value: f64,
     kwargs: tera::Kwargs,
