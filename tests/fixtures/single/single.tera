@@ -20,7 +20,7 @@ hsl({{ v.h | round }}, {{ v.s * 100 | round }}%, {{ v.l * 100 | round }}%)
 
 {% set orange = red | add(hue=30) -%}
 {% set darkgreen = green | sub(lightness=20) -%}
-red: #{{ red.hex }} / {{ self::css_hsl(v=red.hsl) }}
-orangey: #{{ orange.hex }} / {{ self::css_hsl(v=orange.hsl) }}
-green: #{{ green.hex }} / {{ self::css_hsl(v=green.hsl) }}
-dark green: #{{ darkgreen.hex }} // {{ self::css_hsl(v=darkgreen.hsl) }}
+red: #{{ red.hex }} / {{ <css_hsl v={red.hsl}/> }}
+orangey: #{{ orange.hex }} / {{ <css_hsl v={orange.hsl}/> }}
+green: #{{ green.hex }} / {{ <css_hsl v={green.hsl}/> }}
+dark green: #{{ darkgreen.hex }} // {{ <css_hsl v={darkgreen.hsl}/> }}
